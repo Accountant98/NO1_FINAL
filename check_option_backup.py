@@ -35,7 +35,6 @@ input: df_temp (dataframe) DataFrame don't contain the "zone" column.
 ouput: df (dataframe):  DataFrame of feature
 """
 
-
 def create_df_feature(df_temp):
     df_x = df_temp.iloc[0, :]
     df = df_x.drop_duplicates()
@@ -50,7 +49,6 @@ Create dictionaries from kanrenhyo2
 input: df1 (dataframe), df2 (dataframe)
 ouput: result_dict (dict):  Equipment in kanrenhyo2
 """
-
 
 def create_dict_from_kanrenhyo2(df1, df2):
     result_dict = {}
@@ -70,7 +68,6 @@ input: df1 (dataframe):key, df2 (dataframe): equipment
 ouput: result_dict (dict):  Equipment in syo
 """
 
-
 def create_dict_from_syo(df, file_spec):
     data_spec_ = pd.read_excel(file_spec, sheet_name="Sheet1", header=None)
     data_spec_ = data_spec_.map(lambda x: normalize_japanese_text(x).lower() if isinstance(x, str) else x)
@@ -89,7 +86,7 @@ def create_dict_from_syo(df, file_spec):
             # List_dict.append({value: List_value})
             List_dict[value] = List_value
         else:
-            # print(f"Value '{value}' not found in data_spec_.")
+            #print(f"Value '{value}' not found in data_spec_.")
             List_dict[value] = []
     return List_dict
 
@@ -100,7 +97,6 @@ replace special characters
 input: dict(dict): Dictionary of equipment, list(list): Equipment with the same symbol
 ouput: new_dict (dict):  New dictionary after being replaced
 """
-
 
 def repalce_symbol(dict, list):
     new_dict = dict.copy()
@@ -119,7 +115,6 @@ Combine two dictionaries
 input: dict1(dict): Dictionary of kanrenhyo2, dict2(dict): Dictionary of syo
 ouput: common_dict (dict):  New dictionary after Combined
 """
-
 
 def common_elements(dict1, dict2):
     common_dict = {}
@@ -152,26 +147,13 @@ def normalize_japanese_text(input_text):
         for char in input_text:
             normalized_char = unicodedata.normalize('NFKC', char)
             normalized_text += normalized_char
-        normalized_text = normalized_text.replace("\n", "")
-        normalized_text = normalized_text.strip()
+        normalized_text=normalized_text.replace("\n","")
+        normalized_text=normalized_text.strip()
         return normalized_text
     else:
         return input_text
 
-
-def create_string(result_dict_replace, common_dict, result_dict, List_dict_replce):
-    for item1, item2, item3 in zip(common_dict, result_dict_replace, List_dict_replce):
-        if common_dict[item1] == List_dict_replce[item3] or 'all' in result_dict_replace[item2]:
-            result_dict.pop(item1)
-    
-    return result_dict
-    # str_comment = str(result_dict)
-    # for sym in ["[", "]", "'", "{", "}"]:
-    #     str_comment = str_comment.replace(sym, "")
-    # return str_comment
-
-
-def check_option(df_1, file_spec):
+def check_option(df_1,file_spec):
     result_dict = {}
     List_dict = {}
     common_dict = {}
@@ -179,27 +161,12 @@ def check_option(df_1, file_spec):
     super_list = [['w/o', 'without', '-'], ['w', 'with'], ['other', 'その他'], ['awd', '4wd'], ['fwd', '2wd']]
     df_temp, flag_check_empty = create_no_zone_dataframe(df_1)
     if flag_check_empty:
-        return common_dict,1
+        return common_dict
     else:
         df = create_df_feature(df_temp)
         result_dict = create_dict_from_kanrenhyo2(df, df_temp)
         List_dict = create_dict_from_syo(df, file_spec)
-        List_dict_replce = repalce_symbol(List_dict, super_list)
-        result_dict_replace = repalce_symbol(result_dict, super_list)
-        common_dict = common_elements(List_dict_replce, result_dict_replace)
-        dict_kep = create_string(result_dict_replace, common_dict, result_dict, List_dict_replce)
-        # print("List_dict_replce: ", List_dict_replce)
-        # print("result_dict_replace: ", result_dict_replace)
-        # print("common_dict: ", common_dict)
-        return common_dict, dict_kep
-
-
-# df_1 = pd.read_excel(
-#     r"\\vn-ntv-fs004ada\SAVE-DATA\03. XQZ\No1_プロ管集約業務の一本化\05.WORK\DEV\TRONG\27 thang 2\関連表2_I(HF-VR-ETC)_XM6.xlsx",
-#     header=None)
-# df_1 = df_1.map(lambda x: normalize_japanese_text(x).lower() if isinstance(x, str) else x)
-# file_spec = r"\\vn-ntv-fs004ada\SAVE-DATA\03. XQZ\No1_プロ管集約業務の一本化\05.WORK\DEV\TRONG\27 thang 2\仕様表_YYYY.xlsx"
-
-# dict_return, cmt_string = check_option(df_1, file_spec)
-# print("cmt_string: ", cmt_string)
-# print("*********")
+        List_dict = repalce_symbol(List_dict, super_list)
+        result_dict = repalce_symbol(result_dict, super_list)
+        common_dict = common_elements(List_dict, result_dict)
+        return common_dict

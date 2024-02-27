@@ -53,7 +53,7 @@ def create_cadics(case, market, powertrain, car):
         data_karenhyo2 = data_karenhyo2.map(lambda x: normalize_japanese_text(x).lower() if isinstance(x, str) else x)
         dic_lot = get_lot(file_karenhyo_1, powertrain, market, case)  # contain
         flag_all,address_zone=condition_zone_check(data_karenhyo2,adddress_config)
-        common_option=check_option(data_karenhyo2,file_spec)
+        common_option,dict_kep=check_option(data_karenhyo2,file_spec)
         list_infor = get_infor_fixed_group(data_karenhyo2)
         # ========================================================================
         for lot in dic_lot.keys():
@@ -64,7 +64,7 @@ def create_cadics(case, market, powertrain, car):
                 for cadics_no in list_cadics_filter:
                     list_dic_records = pick_car(data_karenhyo2, dict_except_config, cadics_no, adddress_config,
                                                 group,lot, data_spec, list_infor,address_zone,
-                                                dict_grade,common_option,max_car,dict_optioncode,flag_all)
+                                                dict_grade,common_option,max_car,dict_optioncode,flag_all,dict_kep)
                     my_dict_data = my_dict_data + list_dic_records
 
 
@@ -279,7 +279,7 @@ def cal_option(dic_opt,codition_zone):
 -Description: pick 1,*
 """
 def pick_car(data_karenhyo, dict_except_config, cadic_no, adddress_config, group, lot, data_spec, 
-            infor_fix,address_zone,dict_grade,common_option,max_car,dict_optioncode,flag_all):
+            infor_fix,address_zone,dict_grade,common_option,max_car,dict_optioncode,flag_all,dict_kep):
     col_zone, row_opt, row_item,row_class = infor_fix
     list_except_config = dict_except_config[lot]
     dic_address = {"DS": [55, 61, 67], "DC": [55, 68, 74], "PFC": [75, 81, 91], "VC": [92, 98, 107], "PT1": [92, 108, 117], "PT2": [92, 118, 127]}
@@ -337,13 +337,13 @@ def pick_car(data_karenhyo, dict_except_config, cadic_no, adddress_config, group
         dic_data[col_group]=group
         dic_data[col_evaluate]="YES"
         dic_data[130+max_car]="要望仕様が存在しない"
-        dic_data[131+max_car]=comment_nashi(col_opt_pick,row_opt,row_item,row_class)
+        dic_data[131+max_car]=comment_nashi(col_opt_pick,row_opt,row_item,row_class,dict_kep)
         return [dic_data]
     else:
         return list_dict
 
 
-def comment_nashi(col_opt_pick,row_opt,row_item,row_class):  
+def comment_nashi(col_opt_pick,row_opt,row_item,row_class,dict_kep):  
     dic_opt = {}
     for index in col_opt_pick:
         opt = row_opt[index][1]
@@ -353,21 +353,21 @@ def comment_nashi(col_opt_pick,row_opt,row_item,row_class):
         opt_item=str(opt_item)
         opt_item=opt_item.strip()
         condition= row_class[index][3]
+        if opt in dict_kep.keys():
+            if isinstance(condition, str)==False:
+                condition="不問"
+            condition=condition.strip()
+            if opt not in dic_opt.keys():
+                dic_opt[opt] = []
+            if condition not in ["最下級","最上級"]:
+                condition="不問"
 
-        if isinstance(condition, str)==False:
-            condition="不問"
-        condition=condition.strip()
-        if opt not in dic_opt.keys():
-            dic_opt[opt] = []
-        if condition not in ["最下級","最上級"]:
-            condition="不問"
+            if condition!="不問":
+                string_comment="("+opt_item+", グレード選択:"+condition+")"
+            else:
+                string_comment=opt_item
 
-        if condition!="不問":
-            string_comment="("+opt_item+", グレード選択:"+condition+")"
-        else:
-            string_comment=opt_item
-
-        dic_opt[opt].append(string_comment)
+            dic_opt[opt].append(string_comment)
 
     string_comment=str(dic_opt)
     for sym in ["{","}","[","]","'"]:
