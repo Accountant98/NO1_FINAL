@@ -250,6 +250,8 @@ def get_lot(link_kanrenhyo_3,link_kanrenhyo_4):
 def get_group_karenhyo34(folder_data,car):
     dic_group_karenhyo3={}
     dic_group_karenhyo4={}
+    if os.path.exists(folder_data)==False:
+        return None, dic_group_karenhyo3,dic_group_karenhyo4
     files = [f for f in os.listdir(folder_data) if os.path.isfile(os.path.join(folder_data, f))]
     file_name_spec="仕様表_"+str(car).upper()+".xlsx"
     link_file_spec=os.path.join(folder_data,file_name_spec)
