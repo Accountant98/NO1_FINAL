@@ -25,7 +25,7 @@ def create_cadics(case, market, powertrain, car):
     folder_out_check = folder_out_check.replace("\\", "/")
     if os.path.exists(folder_out_check) == False:
         os.mkdir(folder_out_check)
-    file_spec,dic_group_karenhyo12=get_group_karenhyo12(folder_data,car)
+    file_spec,dic_group_karenhyo12=get_group_karenhyo12(folder_data,car,folder_out_check)
     if file_spec==None or len(dic_group_karenhyo12)==0:
         return "Check input again!!!",None,frame_empty(),None,None
     # ===========================set link output=============================
@@ -632,7 +632,7 @@ def normalize_japanese_text(input_text):
         return input_text
 
 
-def get_group_karenhyo12(folder_data,car):
+def get_group_karenhyo12(folder_data,car,folder_out):
     dic_group_karenhyo12={}
     if os.path.exists(folder_data)==False:
         return None, dic_group_karenhyo12
@@ -640,7 +640,7 @@ def get_group_karenhyo12(folder_data,car):
     file_name_spec="仕様表_"+str(car).upper()+".xlsx"
     link_file_spec=os.path.join(folder_data,file_name_spec)
     link_file_spec=link_file_spec.replace("\\","/")
-    #check_document(folder_data,link_file_spec,folder_out)
+    check_document(folder_data,link_file_spec,folder_out)
     if os.path.exists(link_file_spec)==False:
         link_file_spec=None
 

@@ -4,7 +4,7 @@ from streamlit_extras.grid import grid
 from read_data_view import *
 from funtion_database import *
 def reset_data():
-    if st.session_state.get('data') is None:
+    if st.session_state.get('data') is not None:
         st.session_state['data'] = {}
 
 def set_data(key: str,value):
@@ -54,12 +54,13 @@ def user_read_only():
                     st.markdown('<h1 style="text-align: center;">プロ管集約業務システム</h1>', unsafe_allow_html=True)
 
                 with col_r2:
+                    st.markdown(f'<p style="text-align: center;">{st.session_state.name_user}.</p>', unsafe_allow_html=True)
                     st.markdown(f'<p style="text-align: center;">{st.session_state.position}</p>', unsafe_allow_html=True)
-                    #st.markdown(f'<p style="text-align: center;">{"st.session_state.type"}.</p>', unsafe_allow_html=True)
+                    
                 view("use")
                 # Create button select output : Cadis or 5 output
                 
-def view(user):
+def view(position):
     button_select_caout_grid = grid(2,1,4,vertical_align="top")
     row_butt=st.columns(6)   
     selected_option_output_select = button_select_caout_grid.selectbox("SELECT OUTPUT",["CADICS 項目","Car配車要望表","WTC仕様用途一覧表","WTC要望集約兼チェックリスト","実験部品","特性管理部品リスト","File Log"])
@@ -67,9 +68,9 @@ def view(user):
     if get_data("flag_view") == 1:
         if selected_option_output_select == "CADICS 項目" :
             Sheet_name = button_select_caout_grid.selectbox("Select Sheet",["CADICS"])
-            if user=="staff":
+            if position=="staff":
                 button_select_caout_grid.dataframe(get_data("data_cadics"),height=525)
-            if user!="staff":
+            if position!="staff":
                 if  get_data("session")!=None:
                     data_edit=button_select_caout_grid.data_editor(get_data("data_cadics"),height=525)
                     with row_butt[3]:
@@ -137,14 +138,18 @@ def view(user):
                         mime="text/plain",
                         use_container_width=True
                     )
-            elif get_data("link")=="cadics":
-                    st.download_button(
+            elif get_data("link")=="cadics" and len(get_data("data_cadics").columns)>30:
+                    bool=st.download_button(
                         label="Download file current",
-                        data=get_data("data_cadics").to_csv(),
+                        data=get_data("data_cadics").to_csv(index=None,header=None),
                         file_name="CADICS_ALL.csv",
                         mime="text/csv",
-                        use_container_width=True
+                        use_container_width=True,
                     )
+                    if bool==True and position=="admin":
+                        write_cadic_temp(st.session_state.name_user,st.session_state.position,st.session_state.code,st.session_state.pwt,
+                                              st.session_state.plant,st.session_state.case,get_data("data_cadics"))
+                        bool=False
         with row_butt[5]:
             try:
                 #zip_folder(get_data("folder_output"),get_data("folder_output")+".zip")

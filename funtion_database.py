@@ -1,6 +1,6 @@
 import pandas as pd
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, update, func
-from sqlalchemy.orm import sessionmaker, aliased, declarative_base
+from sqlalchemy import create_engine, Column, Integer, String,DateTime, ForeignKey, update, func,and_
+from sqlalchemy.orm import sessionmaker, aliased, declarative_base,class_mapper
 import streamlit as st
 import numpy as np
 import decouple
@@ -44,6 +44,14 @@ class MainTable(Base):
     value = Column(String)
     note_1 = Column(String)
     note_2 = Column(String)
+
+class User(Base):
+    __tablename__ = 'user'
+    id = Column(Integer, primary_key=True)
+    username = Column(String)
+    password = Column(String)
+    permission = Column(String)
+    date = Column(DateTime)
 
 def connect_db():
     database_url = decouple.config('DATABASE_URL')
@@ -194,7 +202,7 @@ def update_edit(data_edit, session, result_df_matched, id_project, id_app_list):
             session.execute(update_stmt)
         session.commit()
 
-        data_edit = data_edit.applymap(lambda x: replace_symbol(x).lower() if isinstance(x, str) else x)
+        data_edit = data_edit.applymap(lambda x: replace_symbol(x) if isinstance(x, str) else x)
         return data_edit
 
     except Exception as e:
@@ -214,25 +222,31 @@ def update_new(project_name, market, power_train, develop_case, df):
 
     existing_project = (session.query(Project).filter_by(project_name=project_name, power_train=power_train, market=market,
                develop_case=develop_case).first())
-    if existing_project is None:
-        project = Project(project_name=project_name, power_train=power_train, market=market,
-                          develop_case=develop_case)
-        session.add(project)
+    #print("existing_project: ",existing_project)
+    if existing_project is not None:
+        project_id = existing_project.id_project
+        session.query(MainTable).filter(MainTable.id_project == project_id).delete()
+        session.query(App).filter(App.project_id == project_id).delete()
+        session.query(Project).filter(Project.id_project == project_id).delete()
         session.commit()
+    project = Project(project_name=project_name, power_train=power_train, market=market,
+                      develop_case=develop_case)
+    session.add(project)
+    session.commit()
 
-        project_id = (session.query(Project.id_project).filter_by(project_name=project_name, power_train=power_train, market=market, develop_case=develop_case).first())[0]
+    project_id = (session.query(Project.id_project).filter_by(project_name=project_name, power_train=power_train, market=market, develop_case=develop_case).first())[0]
 
-        app_list = []
-        app_infor_df = df.iloc[:6, 129:]
-        app_infor_df_rotated = app_infor_df.T
-        app_infor = app_infor_df_rotated.to_records(index=False)
-        app_list.extend([tuple(record) for record in app_infor if any(record)])
-        app_objects = [
-            App(project_id=project_id, market=app[0], engine=app[1], gearbox=app[2], axle=app[3], handle=app[4],
-                app=app[5]) for app in app_list]
+    app_list = []
+    app_infor_df = df.iloc[:6, 129:]
+    app_infor_df_rotated = app_infor_df.T
+    app_infor = app_infor_df_rotated.to_records(index=False)
+    app_list.extend([tuple(record) for record in app_infor if any(record)])
+    app_objects = [
+        App(project_id=project_id, market=app[0], engine=app[1], gearbox=app[2], axle=app[3], handle=app[4],
+            app=app[5]) for app in app_list]
 
-        session.bulk_save_objects(app_objects)
-        session.commit()
+    session.bulk_save_objects(app_objects)
+    session.commit()
 
     project_id = (session.query(Project.id_project).filter_by(project_name=project_name, power_train=power_train, market=market, develop_case=develop_case).first())[0]
 
@@ -273,7 +287,151 @@ def update_new(project_name, market, power_train, develop_case, df):
         session.commit()
 
     session.close()
+    df = df.applymap(lambda x: replace_symbol(x) if isinstance(x, str) else x)
     return  session, df, project_id, app_list
+
+
+
+def log_in(username, password):
+    #engine = create_engine("mysql+mysqlconnector://test_user_1:Sql123456@10.192.85.133/db_21xe_clone")
+    engine=connect_db()
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    result = session.query(User.username, User.permission).filter_by(username=username, password = password).first()
+    if result is not None:
+        session.close()
+    else:
+        session.close()
+        result = (username, None)
+    return result
+
+
+def offline_edit(project_name, market, power_train, develop_case, df_new, df_old):
+    engine = connect_db()
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    mapper = class_mapper(MainTable)
+    columns = [col for col in list(mapper.columns) if col.key != 'id']
+
+
+    df_new.replace({np.nan: ''}, inplace=True)
+
+    project_id = (session.query(Project.id_project).filter_by(project_name=project_name, power_train=power_train, market=market, develop_case=develop_case).first()).id_project
+    main_table_df = df_new.iloc[6:, 0:128]
+    main_table_list = main_table_df.to_records(index=False)
+    characters_to_omit = "<>'\"!#$%^&[]"
+    translation_table = str.maketrans("", "", characters_to_omit)
+    main_table_list = [
+        [s.translate(translation_table) if s is not None else '' for s in sublist]
+        for sublist in main_table_list
+    ]
+    main_table_objects = []
+    app_list =  session.query(App.id_app).filter_by(project_id=project_id).all()
+    app_list = [item[0] for item in app_list]
+    for index_element, element in enumerate(main_table_list):
+
+        for app in app_list:
+            config_value = str(df_new.iloc[6 + index_element, 129 + app_list.index(app)])
+            note_1 = str(df_new.iloc[6 + index_element, 129 + len(app_list)])
+            note_2 = str(df_new.iloc[6 + index_element, 130 + len(app_list)])
+            config_value = ''.join(char for char in config_value if char not in characters_to_omit)
+            note_1 = ''.join(char for char in note_1 if char not in characters_to_omit)
+            note_2 = ''.join(char for char in note_2 if char not in characters_to_omit)
+
+            main_table_objects.append(
+                MainTable(action=element[0], cadic_number=element[1], snt = element[2], regulations = element[3], pep = element[4], Other = element[5], good_design = element[6], y0 = element[7], y0_number = element[8], car_recurrence_prevention = element[9], solution = element[10], solution_number = element[11], common_validation_item = element[12], procedure_item = element[13], requirement = element[14], step1_pt_jp = element[15], step2_pt_jp = element[16], step1_vt_jp = element[17], step2_vt_jp = element[18], step3_vt_jp = element[19], lv1_ct_jp = element[20], lv2_ct_jp = element[21], lv3_ct_jp = element[22], lv4_ct_jp = element[23], comment_ct_jp = element[24], step1_pt_en = element[25], step2_pt_en = element[26], step1_vt_en = element[27], step2_vt_en = element[28], step3_vt_en = element[29], lv1_ct_en = element[30], lv2_ct_en = element[31], lv3_ct_en = element[32], lv4_ct_en = element[33], comment_ct_en = element[34], digital_evaluation_app = element[35], pf_evaluation_app = element[36], physical_evaluation_app = element[37], kca_project_group_deploy = element[38], team_deploy = element[39], manager_name_deploy = element[40], id_or_mail_account_deploy = element[41], name_of_person_in_charge_deploy = element[42], id_or_mail_account_2_deploy = element[43], target_value_deploy = element[44], comment_deploy = element[45], kca_project_group_ac = element[46], team_ac = element[47], manager_name_ac = element[48], id_or_mail_account_ac = element[49], name_of_person_in_charge_ac = element[50], id_or_mail_account_2_ac = element[51], agreement_of_target_ac = element[52], comment_ac = element[53], kca_project_group_digital = element[54], team_digital = element[55], manager_name_digital = element[56], id_or_mail_account_digital = element[57], evaluation_responsible_digital = element[58], id_or_mail_account_2_digital = element[59], evaluate_or_not_ds = element[60], result_first_ds = element[61], report_number_ds = element[62], number_of_qbase_ds = element[63], qbase_number_ds = element[64], result_counter_ds = element[65], comment_ds = element[66], evaluate_or_not_dc = element[67], result_first_dc = element[68], report_number_dc = element[69], number_of_qbase_dc = element[70], qbase_number_dc = element[71], result_counter_dc = element[72], comment_dc = element[73], kca_project_group_ppc = element[74], team_ppc = element[75], manager_name_ppc = element[76], id_or_mail_account_ppc = element[77], evaluation_responsible_ppc = element[78], id_or_mail_account_2_ppc = element[79], evaluate_or_not_pfc = element[80], confirmation_first_pfc = element[81], feedback_timing_pfc = element[82], result_first_pfc = element[83], confirmation_completion_pfc = element[84], report_number_pfc = element[85], number_of_qbase_pfc = element[86], qbase_number_pfc = element[87], result_counter_pfc = element[88], confirmation_completion_date_pfc = element[89], comment_pfc = element[90], kca_project_group_ppe = element[91], team_ppe = element[92], manager_name_ppe = element[93], id_or_mail_account_ppe = element[94], evaluation_responsible_ppe = element[95], id_or_mail_account_2_ppe = element[96], evaluate_or_not_vc = element[97], confirm_first_date_vc = element[98], result_first_vc = element[99], confirm_first_completion_vc = element[100], report_number_vc = element[101], number_of_qbase_vc = element[102], qbase_number_vc = element[103], result_counter_vc = element[104], confirm_first_completion_2_vc = element[105], comment_vc = element[106], evaluate_or_not_pt1 = element[107], confirm_first_date_pt1 = element[108], result_first_pt1 = element[109], confirm_first_completion_pt1 = element[110], report_number_pt1 = element[111], number_of_qbase_pt1 = element[112], qbase_number_pt1 = element[113], result_counter_pt1 = element[114], confirm_first_completion_2_pt1 = element[115], comment_pt1 = element[116], evaluate_or_not_pt2 = element[117], confirmation_first_time_pt2 = element[118], result_first_pt2 = element[119], confirm_first_completion_pt2 = element[120], report_number_pt2 = element[121], number_of_qbase_pt2 = element[122], qbase_number_pt2 = element[123], result_counter_pt2 = element[124], confirm_first_completion_2_pt2 = element[125], comment_pt2 = element[126], common_unique = element[127], id_project=project_id, id_app=app,
+                          value=config_value, note_1=note_1, note_2=note_2))
+
+    new_for_compare = [tuple(obj.__dict__.values()) for obj in main_table_objects]
+    new_for_compare = [tuple[1:] for tuple in new_for_compare]
+
+    df_old.replace({np.nan: ''}, inplace=True)
+
+    main_table_df = df_old.iloc[6:, 0:128]
+    main_table_list = main_table_df.to_records(index=False)
+
+    main_table_objects = []
+    for index_element, element in enumerate(main_table_list):
+        for app in app_list:
+            config_value = str(df_old.iloc[6 + index_element, 129 + app_list.index(app)])
+            note_1 = str(df_old.iloc[6 + index_element, 129 + len(app_list)])
+            note_2 = str(df_old.iloc[6 + index_element, 130 + len(app_list)])
+            config_value = ''.join(char for char in config_value if char not in characters_to_omit)
+            note_1 = ''.join(char for char in note_1 if char not in characters_to_omit)
+            note_2 = ''.join(char for char in note_2 if char not in characters_to_omit)
+
+            main_table_objects.append(
+                MainTable(action=element[0], cadic_number=element[1], snt = element[2], regulations = element[3], pep = element[4], Other = element[5], good_design = element[6], y0 = element[7], y0_number = element[8], car_recurrence_prevention = element[9], solution = element[10], solution_number = element[11], common_validation_item = element[12], procedure_item = element[13], requirement = element[14], step1_pt_jp = element[15], step2_pt_jp = element[16], step1_vt_jp = element[17], step2_vt_jp = element[18], step3_vt_jp = element[19], lv1_ct_jp = element[20], lv2_ct_jp = element[21], lv3_ct_jp = element[22], lv4_ct_jp = element[23], comment_ct_jp = element[24], step1_pt_en = element[25], step2_pt_en = element[26], step1_vt_en = element[27], step2_vt_en = element[28], step3_vt_en = element[29], lv1_ct_en = element[30], lv2_ct_en = element[31], lv3_ct_en = element[32], lv4_ct_en = element[33], comment_ct_en = element[34], digital_evaluation_app = element[35], pf_evaluation_app = element[36], physical_evaluation_app = element[37], kca_project_group_deploy = element[38], team_deploy = element[39], manager_name_deploy = element[40], id_or_mail_account_deploy = element[41], name_of_person_in_charge_deploy = element[42], id_or_mail_account_2_deploy = element[43], target_value_deploy = element[44], comment_deploy = element[45], kca_project_group_ac = element[46], team_ac = element[47], manager_name_ac = element[48], id_or_mail_account_ac = element[49], name_of_person_in_charge_ac = element[50], id_or_mail_account_2_ac = element[51], agreement_of_target_ac = element[52], comment_ac = element[53], kca_project_group_digital = element[54], team_digital = element[55], manager_name_digital = element[56], id_or_mail_account_digital = element[57], evaluation_responsible_digital = element[58], id_or_mail_account_2_digital = element[59], evaluate_or_not_ds = element[60], result_first_ds = element[61], report_number_ds = element[62], number_of_qbase_ds = element[63], qbase_number_ds = element[64], result_counter_ds = element[65], comment_ds = element[66], evaluate_or_not_dc = element[67], result_first_dc = element[68], report_number_dc = element[69], number_of_qbase_dc = element[70], qbase_number_dc = element[71], result_counter_dc = element[72], comment_dc = element[73], kca_project_group_ppc = element[74], team_ppc = element[75], manager_name_ppc = element[76], id_or_mail_account_ppc = element[77], evaluation_responsible_ppc = element[78], id_or_mail_account_2_ppc = element[79], evaluate_or_not_pfc = element[80], confirmation_first_pfc = element[81], feedback_timing_pfc = element[82], result_first_pfc = element[83], confirmation_completion_pfc = element[84], report_number_pfc = element[85], number_of_qbase_pfc = element[86], qbase_number_pfc = element[87], result_counter_pfc = element[88], confirmation_completion_date_pfc = element[89], comment_pfc = element[90], kca_project_group_ppe = element[91], team_ppe = element[92], manager_name_ppe = element[93], id_or_mail_account_ppe = element[94], evaluation_responsible_ppe = element[95], id_or_mail_account_2_ppe = element[96], evaluate_or_not_vc = element[97], confirm_first_date_vc = element[98], result_first_vc = element[99], confirm_first_completion_vc = element[100], report_number_vc = element[101], number_of_qbase_vc = element[102], qbase_number_vc = element[103], result_counter_vc = element[104], confirm_first_completion_2_vc = element[105], comment_vc = element[106], evaluate_or_not_pt1 = element[107], confirm_first_date_pt1 = element[108], result_first_pt1 = element[109], confirm_first_completion_pt1 = element[110], report_number_pt1 = element[111], number_of_qbase_pt1 = element[112], qbase_number_pt1 = element[113], result_counter_pt1 = element[114], confirm_first_completion_2_pt1 = element[115], comment_pt1 = element[116], evaluate_or_not_pt2 = element[117], confirmation_first_time_pt2 = element[118], result_first_pt2 = element[119], confirm_first_completion_pt2 = element[120], report_number_pt2 = element[121], number_of_qbase_pt2 = element[122], qbase_number_pt2 = element[123], result_counter_pt2 = element[124], confirm_first_completion_2_pt2 = element[125], comment_pt2 = element[126], common_unique = element[127], id_project=project_id, id_app=app,
+                          value=config_value, note_1=note_1, note_2=note_2))
+
+
+
+    old_for_compare = [tuple(obj.__dict__.values()) for obj in main_table_objects]
+    old_for_compare = [tuple[1:] for tuple in old_for_compare]
+
+    list_cadic_number_old = [sub_tuple[1] for sub_tuple in old_for_compare]
+    list_cadic_number_new = [sub_tuple[1] for sub_tuple in new_for_compare]
+    seen_values = set()
+    list_cadic_number_old = [value for value in list_cadic_number_old if (value not in seen_values) and not seen_values.add(value)]
+    seen_values = set()
+    list_cadic_number_new = [value for value in list_cadic_number_new if (value not in seen_values) and not seen_values.add(value)]
+
+
+
+    # Delete cadic case (new khong co, old co)
+    delete_cadic_number_list = list(set(list_cadic_number_old) - set(list_cadic_number_new))
+    delete_cadic_tuple = []
+    if delete_cadic_number_list:
+        delete_cadic_number_tuple = tuple(delete_cadic_number_list)
+        for cadic_number in delete_cadic_number_list:
+            for item in old_for_compare:
+                if cadic_number == item[1]:
+                    delete_cadic_tuple.append(item)
+        session.query(MainTable).filter(
+            and_(MainTable.id_project == project_id, MainTable.cadic_number.in_(delete_cadic_number_tuple))).delete()
+        session.commit()
+    # Add cadic case (new co, old khong co)
+    insert_cadic_number_list = list(set(list_cadic_number_new) - set(list_cadic_number_old))
+    insert_cadic_tuple = []
+    if insert_cadic_number_list:
+        main_table_objects = []
+        for cadic_number in insert_cadic_number_list:
+            for item in new_for_compare:
+                if cadic_number == item[1]:
+                    insert_cadic_tuple.append(item)
+
+        for sub_element in insert_cadic_tuple:
+            main_table_objects.append(MainTable(**{col.key: value for col, value in zip(columns, sub_element)}))
+
+        session.bulk_save_objects(main_table_objects)
+        session.commit()
+
+    # Modified cadic case (ca hai co nhung khac nhau)
+    new_for_compare_omit_insert_cadic = list(set(new_for_compare) - set(insert_cadic_tuple))
+    old_for_compare_omit_delete_cadic = list(set(old_for_compare) - set(delete_cadic_tuple))
+    modified_cadic_list = list(set(new_for_compare_omit_insert_cadic) - set(old_for_compare_omit_delete_cadic))
+    modified_main_table_objects = []
+    if modified_cadic_list:
+        for sub_element in modified_cadic_list:
+            cadic_updated = sub_element[1]
+            id_project_update = sub_element[128]
+            app_updated = sub_element[129]
+
+            update_data = {col.key: value for col, value in zip(columns, sub_element)}
+
+            modified_main_table_objects.append(MainTable(**update_data))
+            session.query(MainTable).filter(
+                (MainTable.id_project == id_project_update) &
+                (MainTable.id_app == app_updated) &
+                (MainTable.cadic_number == cadic_updated)
+            ).update(update_data)
+            session.commit()
+
+
+    session.close()
+
 
 def replace_symbol(input_text):
     if isinstance(input_text,str):

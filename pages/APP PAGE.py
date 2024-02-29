@@ -7,12 +7,16 @@ st.set_page_config(
     page_icon=":smiley:",
     layout="wide"  
 )
+def reset_data():
+    if st.session_state.get('data') is not None:
+        st.session_state['data'] = {}
 
-if 1==2:
+if 1==1:
     try :
         if st.session_state.position=="admin": #st.session_state.mail:
         #------------MAIN APP-----------x
             try:
+    
                 admin()
             except Exception as e:
                 st.error(f"Error: {e}")
@@ -21,6 +25,8 @@ if 1==2:
                 user_read_only()
             except Exception as e:
                 st.error(f"Error: {e}")
+        else:
+            st.warning("Please login before running app!!!")
     except:
         st.warning("Please login before running app!!!")
 else:

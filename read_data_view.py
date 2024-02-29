@@ -57,3 +57,15 @@ def zip_folder(folder_path, zip_path):
                 file_path = os.path.join(root, file)
                 zip_path = os.path.relpath(file_path, folder_path)
                 zipf.write(file_path, zip_path)
+
+
+def write_cadic_temp(use,pos,car,pwt,plant,case,df):
+    if pos=="admin":
+        working = os.path.dirname(__file__)
+        folder_name = str(use).upper()+"_"+str(car).upper() + "_" + pwt + "_" + plant + "_" + case
+        folder_data=os.path.join(working, "cadic_temp", folder_name)
+        folder_data=folder_data.replace("\\","/")
+        link_cadic=folder_data+"/CADICS_ALL.csv"
+        if os.path.exists(folder_data)==False:
+            os.mkdir(folder_data)
+        df.to_csv(link_cadic,index=None,header=None)

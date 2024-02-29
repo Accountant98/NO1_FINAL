@@ -6,6 +6,7 @@ from user_read_only import view
 from update_file import get_csrf_token,update_file_into_server
 from create_cadics import create_cadics
 from create_document_step2 import create_doc
+from update_file import update_file_after_edit
 def reset_data():
     if st.session_state.get('data') is None:
         st.session_state['data'] = {}
@@ -54,10 +55,10 @@ def admin():
                 set_data("running",0)
                 
             if col_left_spec_grid.form_submit_button("Create Cadics", use_container_width=True)==True and get_data("running")==0 :
+                # if st.form_submit_button("Confirm Create Cadics", use_container_width=True)==True:
                 set_data("running",1) 
                 #st.write(st.session_state.case,st.session_state.plant,st.session_state.pwt,st.session_state.code)
                 notice,session, data, project_id, app_list=create_cadics(st.session_state.case,st.session_state.plant,st.session_state.pwt,st.session_state.code)
-                
                 #notice,session, data, project_id, app_list=[None,None,None,None,None]
                 set_data("data_cadics",data)
                 set_state_db(session,project_id,app_list)
@@ -73,14 +74,21 @@ def admin():
                 set_state(list_file,folder_output,name_zip)
                 set_data("running",0)
 
+            if st.form_submit_button("Update File Cadics", use_container_width=True) and get_data("running") == 0:
+                set_data("running",1) 
+                notice=update_file_after_edit(st.session_state.code, st.session_state.pwt, st.session_state.plant,
+                                       st.session_state.case, files, csrf_token,st.session_state.name_user)
+                set_data("running",0)
+                st.write(notice)
     with col_right:
         # BANNER RIGHT
         col_r1, col_r2 = st.columns([2,1])
         with col_r1:
             st.markdown('<h1 style="text-align: center;">プロ管集約業務システム</h1>', unsafe_allow_html=True)
         with col_r2:
+            st.markdown(f'<p style="text-align: center;">{st.session_state.name_user}.</p>', unsafe_allow_html=True)
             st.markdown(f'<p style="text-align: center;">{st.session_state.position}</p>', unsafe_allow_html=True)
-            #st.markdown(f'<p style="text-align: center;">{"st.session_state.type"}.</p>', unsafe_allow_html=True)
+            
         view("admin")
         
 
